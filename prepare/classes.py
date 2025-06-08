@@ -99,7 +99,7 @@ class Advanced3DAugment:
             vol = self.intensity_transform(vol)
 
         # Force crop/resize to target_shape
-        vol = self._resize_or_crop(vol, self.target_shape)
+        #vol = self._resize_or_crop(vol, self.target_shape)
 
         return vol.astype(np.float32)
 
