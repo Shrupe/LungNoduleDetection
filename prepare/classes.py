@@ -42,6 +42,10 @@ class LunaPatchDataset(Dataset):
         # Add channel dimension for CNN input: (1, D, H, W)
         patch = torch.from_numpy(patch).unsqueeze(0)
 
+        # Sanity check
+        if patch.shape != (1, 32, 32, 32):
+            print(f"[!] Bad shape at idx {idx}: {patch} | Label: {label}")
+
         return patch, label
 
 
