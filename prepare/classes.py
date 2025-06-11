@@ -4,25 +4,29 @@ import pandas as pd
 import numpy as np
 import random
 from scipy.ndimage import gaussian_filter, map_coordinates
-import os
 from scipy.ndimage import zoom
 
 class LunaPatchDataset(Dataset):
-    def __init__(self, csv_file, transform=None, hu_min=-1000, hu_max=400, zero_center=True):
-        self.data_df = pd.read_csv(csv_file)
+    def __init__(self, csv_file_or_df, transform=None, hu_min=-1000, hu_max=400, zero_center=True,
+                 min_intensity=0.05, filter_positives_only=False):
+        if isinstance(csv_file_or_df, pd.DataFrame):
+            self.data_df = csv_file_or_df
+        else:
+            self.data_df = pd.read_csv(csv_file_or_df)
+        
         self.transform = transform
         self.hu_min = hu_min
         self.hu_max = hu_max
         self.zero_center = zero_center
+        self.min_intensity = min_intensity
+        self.filter_positives_only = filter_positives_only
+
 
     def normalize_hu(self, img):
-        # Clip and scale to [0, 1]
         img = np.clip(img, self.hu_min, self.hu_max)
         img = (img - self.hu_min) / (self.hu_max - self.hu_min)
-
         if self.zero_center:
-            img = img - 0.5  # Now in [-0.5, 0.5]
-
+            img = img - 0.5
         return img.astype(np.float32)
 
     def __len__(self):
@@ -33,18 +37,26 @@ class LunaPatchDataset(Dataset):
         patch_path = row['path']
         label = int(row['label'])
 
-        patch = np.load(patch_path)  # Shape: (D, H, W)
+        patch = np.load(patch_path)
         patch = self.normalize_hu(patch)
+
+        # --- LOW INTENSITY FILTER ---
+        if (not self.filter_positives_only or label == 1):
+            if patch.mean() < self.min_intensity:
+                # Find the next non-rejected patch (skip this one)
+                # Silently skip or print warning
+                print(f"[!] Skipping patch at idx {idx} (label={label}) due to low mean intensity: {patch.mean():.4f}")
+                # Rastgele başka bir patch dener
+                new_idx = random.randint(0, len(self.data_df)-1)
+                return self._getitem_(new_idx)
 
         if self.transform:
             patch = self.transform(patch)
 
-        # Add channel dimension for CNN input: (1, D, H, W)
         patch = torch.from_numpy(patch).unsqueeze(0)
 
-        # Sanity check
         if patch.shape != (1, 32, 32, 32):
-            print(f"[!] Bad shape at idx {idx}: {patch} | Label: {label}")
+            print(f"[!] Bad shape at idx {idx}: {patch.shape} | Label: {label}")
 
         return patch, label
 

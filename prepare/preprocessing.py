@@ -4,8 +4,6 @@ import SimpleITK as sitk
 import scipy.ndimage
 from skimage import measure, morphology
 import pandas as pd
-from multiprocessing import Pool, cpu_count
-import traceback
 
 def load_scan(filename):
     itk_img = sitk.ReadImage(filename)
@@ -94,10 +92,10 @@ def normalize(image):
     image = (image - MIN_BOUND) / (MAX_BOUND - MIN_BOUND)
     return np.clip(image, 0.0, 1.0)
 
-def preprocess_mhd_file(mhd_path):
+def preprocess_mhd_file(mhd_path, fill_lung_structures=True):
     image, origin, spacing = load_scan(mhd_path)
     image, spacing = resample(image, spacing)
-    lung_mask= segment_lung_mask(image)
+    lung_mask= segment_lung_mask(image, fill_lung_structures)
     image = normalize(image) * lung_mask  # Mask non-lung area
     return image, origin, spacing
 
@@ -114,12 +112,12 @@ def count_subset_directories(directory):
         print(f"Error: Permission denied to access '{directory}'.")
         return 0
     
-def process_all_scans(input_root, output_root):
+def process_all_scans(input_root, output_root, fill_lung_structures=True):
 
     # adjust output file path and subset folders
     os.makedirs(output_root, exist_ok=True)
     subset_folder_count = count_subset_directories(input_root)
-    SUBSET_FOLDERS = [f"subset{i}/subset{i}" for i in range(subset_folder_count)]
+    SUBSET_FOLDERS = [f"subset{i}" for i in range(subset_folder_count)]
     
     metadata = []
     
@@ -135,7 +133,7 @@ def process_all_scans(input_root, output_root):
             full_path = os.path.join(subset_path, mhd)
             case_id = mhd.replace(".mhd", "")
             try:
-                image, origin, spacing = preprocess_mhd_file(full_path)
+                image, origin, spacing = preprocess_mhd_file(full_path, fill_lung_structures)
                 save_path = os.path.join(output_root, f"{case_id}.npy")
                 np.save(save_path, image)
 

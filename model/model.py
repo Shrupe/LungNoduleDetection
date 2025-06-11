@@ -4,35 +4,48 @@ import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, roc_auc_score
 from tqdm import tqdm
 import numpy as np
-import os
 
 class Luna3DCNN(nn.Module):
-    def __init__(self):
-        super(Luna3DCNN, self).__init__()
-        self.conv1 = nn.Conv3d(1, 32, kernel_size=3, padding=1)
-        self.pool1 = nn.MaxPool3d(2)
+    def __init__(self, in_channels=1, num_classes=1, dropout_rate=0.3):
+        super().__init__()
         
-        self.conv2 = nn.Conv3d(32, 64, kernel_size=3, padding=1)
-        self.pool2 = nn.MaxPool3d(2)
-        
-        self.conv3 = nn.Conv3d(64, 128, kernel_size=3, padding=1)
-        
+        self.features = nn.Sequential(
+            nn.Conv3d(in_channels, 32, kernel_size=3, padding=1),
+            nn.BatchNorm3d(32),
+            nn.ReLU(inplace=True),
+            nn.MaxPool3d(2),
+
+            nn.Conv3d(32, 64, kernel_size=3, padding=1),
+            nn.BatchNorm3d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool3d(2),
+
+            nn.Conv3d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm3d(128),
+            nn.ReLU(inplace=True),
+            nn.MaxPool3d(2),
+
+            nn.Conv3d(128, 256, kernel_size=3, padding=1),
+            nn.BatchNorm3d(256),
+            nn.ReLU(inplace=True),
+        )
+
         self.global_pool = nn.AdaptiveAvgPool3d(1)
-        self.fc = nn.Linear(128, 1)
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout_rate),
+            nn.Linear(256, 128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout_rate),
+            nn.Linear(128, num_classes)
+        )
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))    # [B, 32, 32, 32, 32]
-        x = self.pool1(x)            # [B, 32, 16, 16, 16]
+        x = self.features(x)
+        x = self.global_pool(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        return x  # BCEWithLogitsLoss expects raw logits
 
-        x = F.relu(self.conv2(x))    # [B, 64, 16, 16, 16]
-        x = self.pool2(x)            # [B, 64, 8, 8, 8]
-
-        x = F.relu(self.conv3(x))    # [B, 128, 8, 8, 8]
-        x = self.global_pool(x)      # [B, 128, 1, 1, 1]
-        x = x.view(x.size(0), -1)    # [B, 128]
-        x = self.fc(x)               # [B, 1]
-
-        return torch.sigmoid(x)      # Sigmoid for binary classification
 
 def train_one_epoch(model, loader, optimizer, criterion, device):
     model.train()
@@ -45,9 +58,13 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
 
         optimizer.zero_grad()
         output = model(x)
+        output = torch.clamp(output, -10, 10)  # Clamp logits
         loss = criterion(output, y)
+
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0)
         optimizer.step()
+
 
         losses.append(loss.item())
         all_preds.extend(output.detach().cpu().numpy())
@@ -71,6 +88,7 @@ def validate(model, loader, criterion, device):
             y = y.to(device).float().view(-1, 1)
 
             output = model(x)
+            output = torch.clamp(output, -10, 10)  # Clamp logits
             loss = criterion(output, y)
 
             losses.append(loss.item())
