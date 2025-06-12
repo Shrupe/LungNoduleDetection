@@ -1,4 +1,5 @@
 Final Project
+Used Dataset: https://luna16.grand-challenge.org/
 
 Results:
   [Train] Loss: 0.2130 | Acc: 0.9204 | AUC: 0.9677
