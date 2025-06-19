@@ -1,6 +1,8 @@
 Final Project
 Used Dataset: https://luna16.grand-challenge.org/
 
+https://www.kaggle.com/code/gzuidhof/full-preprocessing-tutorial
+
 Preprocess .mhd > Create processed .npy files > Positive patches: Extract nodule centered 3d (32, 32, 32) patches (create one with augmentation), Negative patches: Extract 3d patches with no nodule > Split the data and train
 
 !!! Model in this project searches nodule in the center of the given patch.
