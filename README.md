@@ -1,4 +1,3 @@
-Final Project
 Used Dataset: https://luna16.grand-challenge.org/
 
 https://www.kaggle.com/code/gzuidhof/full-preprocessing-tutorial
